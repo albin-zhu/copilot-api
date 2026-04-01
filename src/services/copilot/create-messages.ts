@@ -13,6 +13,7 @@ import {
   prepareForCompact,
   prepareInteractionHeaders,
 } from "~/lib/api-config"
+import { getAgentInitiatorMode } from "~/lib/config"
 import { HTTPError } from "~/lib/error"
 import { state } from "~/lib/state"
 
@@ -85,9 +86,26 @@ export const createMessages = async (
       : true
   }
 
+  const agentInitiatorMode = getAgentInitiatorMode()
+  let initiator: "user" | "agent"
+  if (agentInitiatorMode === "all") {
+    initiator = "agent"
+  } else if (agentInitiatorMode === "non-first") {
+    const hasAssistantTurn = payload.messages.some(
+      (m) => m.role === "assistant",
+    )
+    if (hasAssistantTurn) {
+      initiator = "agent"
+    } else {
+      initiator = isInitiateRequest ? "user" : "agent"
+    }
+  } else {
+    initiator = isInitiateRequest ? "user" : "agent"
+  }
+
   const headers: Record<string, string> = {
     ...copilotHeaders(state, options.requestId, enableVision),
-    "x-initiator": isInitiateRequest ? "user" : "agent",
+    "x-initiator": initiator,
   }
 
   prepareInteractionHeaders(

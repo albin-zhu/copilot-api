@@ -3,6 +3,8 @@ import fs from "node:fs"
 
 import { PATHS } from "./paths"
 
+export type AgentInitiatorMode = "off" | "all" | "non-first"
+
 export interface AppConfig {
   auth?: {
     apiKeys?: Array<string>
@@ -20,6 +22,7 @@ export interface AppConfig {
   anthropicApiKey?: string
   useResponsesApiWebSearch?: boolean
   claudeTokenMultiplier?: number
+  agentInitiatorMode?: AgentInitiatorMode
 }
 
 export interface ModelConfig {
@@ -305,4 +308,24 @@ export function isResponsesApiWebSearchEnabled(): boolean {
 export function getClaudeTokenMultiplier(): number {
   const config = getConfig()
   return config.claudeTokenMultiplier ?? 1.15
+}
+
+export function getAgentInitiatorMode(): AgentInitiatorMode {
+  const config = getConfig()
+  return config.agentInitiatorMode ?? "off"
+}
+
+export function updateConfig(patch: Partial<AppConfig>): void {
+  const current = getConfig()
+  const updated = { ...current, ...patch }
+  cachedConfig = updated
+  try {
+    fs.writeFileSync(
+      PATHS.CONFIG_PATH,
+      `${JSON.stringify(updated, null, 2)}\n`,
+      "utf8",
+    )
+  } catch (error) {
+    consola.error("Failed to write config file", error)
+  }
 }

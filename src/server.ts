@@ -12,6 +12,7 @@ import { modelRoutes } from "./routes/models/route"
 import { providerMessageRoutes } from "./routes/provider/messages/route"
 import { providerModelRoutes } from "./routes/provider/models/route"
 import { responsesRoutes } from "./routes/responses/route"
+import { settingsRoute } from "./routes/settings/route"
 import { tokenRoute } from "./routes/token/route"
 import { usageRoute } from "./routes/usage/route"
 
@@ -23,7 +24,12 @@ server.use(cors())
 server.use(
   "*",
   createAuthMiddleware({
-    allowUnauthenticatedPaths: ["/", "/usage-viewer", "/usage-viewer/"],
+    allowUnauthenticatedPaths: [
+      "/",
+      "/usage-viewer",
+      "/usage-viewer/",
+      "/usage-viewer/settings",
+    ],
   }),
 )
 
@@ -39,6 +45,7 @@ server.route("/models", modelRoutes)
 server.route("/embeddings", embeddingRoutes)
 server.route("/usage", usageRoute)
 server.route("/token", tokenRoute)
+server.route("/usage-viewer/settings", settingsRoute)
 server.route("/responses", responsesRoutes)
 
 // Compatibility with tools that expect v1/ prefix

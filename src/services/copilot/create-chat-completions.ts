@@ -9,6 +9,7 @@ import {
   prepareForCompact,
   prepareInteractionHeaders,
 } from "~/lib/api-config"
+import { getAgentInitiatorMode } from "~/lib/config"
 import { HTTPError } from "~/lib/error"
 import { state } from "~/lib/state"
 
@@ -30,8 +31,6 @@ export const createChatCompletions = async (
   )
 
   // Agent/user check for x-initiator header
-  // Determine if any message is from an agent ("assistant" or "tool")
-  // Refactor `isAgentCall` logic to check only the last message in the history rather than any message. This prevents valid user messages from being incorrectly flagged as agent calls due to previous assistant history, ensuring proper credit consumption for multi-turn conversations.
   let isAgentCall = false
   if (payload.messages.length > 0) {
     const lastMessage = payload.messages.at(-1)
@@ -40,10 +39,23 @@ export const createChatCompletions = async (
     }
   }
 
+  const agentInitiatorMode = getAgentInitiatorMode()
+  let initiator: "user" | "agent"
+  if (agentInitiatorMode === "all") {
+    initiator = "agent"
+  } else if (agentInitiatorMode === "non-first") {
+    const hasAssistantTurn = payload.messages.some(
+      (m) => m.role === "assistant",
+    )
+    initiator = hasAssistantTurn || isAgentCall ? "agent" : "user"
+  } else {
+    initiator = isAgentCall ? "agent" : "user"
+  }
+
   // Build headers and add x-initiator
   const headers: Record<string, string> = {
     ...copilotHeaders(state, options.requestId, enableVision),
-    "x-initiator": isAgentCall ? "agent" : "user",
+    "x-initiator": initiator,
   }
 
   prepareInteractionHeaders(

@@ -190,6 +190,37 @@
           </form>
         </div>
 
+        <!-- Settings Section -->
+        <div
+          id="settings-panel"
+          class="mb-6 p-4 border"
+          style="background-color: var(--color-bg-soft); border-color: var(--color-bg-light-2);"
+        >
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+            <span class="font-semibold text-sm whitespace-nowrap" style="color: var(--color-fg-lightest);">
+              Agent Initiator Mode
+            </span>
+            <div class="flex gap-2 flex-wrap">
+              <button
+                data-mode="off"
+                class="mode-btn px-3 py-1 text-xs font-mono border transition-colors"
+                title="Default behavior: user messages count as premium"
+              >off</button>
+              <button
+                data-mode="non-first"
+                class="mode-btn px-3 py-1 text-xs font-mono border transition-colors"
+                title="First message counts as premium, subsequent turns do not"
+              >non-first</button>
+              <button
+                data-mode="all"
+                class="mode-btn px-3 py-1 text-xs font-mono border transition-colors"
+                title="All requests marked as agent — no premium consumed"
+              >all</button>
+            </div>
+            <span id="mode-status" class="text-xs font-mono" style="color: var(--color-gray);"></span>
+          </div>
+        </div>
+
         <!-- Content Area for dynamic data -->
         <main id="content-area"></main>
       </div>
@@ -514,6 +545,72 @@
             endpointUrlInput.value = DEFAULT_ENDPOINT;
             render(); // Render initial welcome message
           }
+
+          initSettings();
+        }
+
+        // --- Settings / AgentInitiatorMode ---
+
+        function getSettingsBaseUrl() {
+          try {
+            const url = new URL(endpointUrlInput.value.trim());
+            return `${url.protocol}//${url.host}/usage-viewer/settings`;
+          } catch {
+            return "/usage-viewer/settings";
+          }
+        }
+
+        function applyModeButtons(currentMode) {
+          const modeColors = {
+            off: "var(--color-gray)",
+            "non-first": "var(--color-yellow)",
+            all: "var(--color-green)",
+          };
+          document.querySelectorAll(".mode-btn").forEach((btn) => {
+            const mode = btn.getAttribute("data-mode");
+            const isActive = mode === currentMode;
+            btn.style.backgroundColor = isActive
+              ? modeColors[mode]
+              : "var(--color-bg-darkest)";
+            btn.style.borderColor = isActive
+              ? modeColors[mode]
+              : "var(--color-bg-light-3)";
+            btn.style.color = isActive
+              ? "var(--color-bg-darkest)"
+              : "var(--color-fg-dark)";
+          });
+          const statusEl = document.getElementById("mode-status");
+          const desc = {
+            off: "default — premium consumed per user turn",
+            "non-first": "first turn costs premium, subsequent turns free",
+            all: "all turns free — no premium consumed",
+          };
+          statusEl.textContent = desc[currentMode] ?? "";
+        }
+
+        async function initSettings() {
+          try {
+            const res = await fetch(getSettingsBaseUrl());
+            if (!res.ok) return;
+            const data = await res.json();
+            applyModeButtons(data.agentInitiatorMode ?? "off");
+          } catch {}
+
+          document.querySelectorAll(".mode-btn").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+              const mode = btn.getAttribute("data-mode");
+              try {
+                const res = await fetch(getSettingsBaseUrl(), {
+                  method: "PATCH",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ agentInitiatorMode: mode }),
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                applyModeButtons(data.agentInitiatorMode ?? "off");
+              } catch {}
+            });
+          });
         }
 
         // Start the app

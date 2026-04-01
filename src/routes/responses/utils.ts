@@ -4,13 +4,29 @@ import type {
   ResponsesPayload,
 } from "~/services/copilot/create-responses"
 
-import { isResponsesApiContextManagementModel } from "~/lib/config"
+import {
+  getAgentInitiatorMode,
+  isResponsesApiContextManagementModel,
+} from "~/lib/config"
 
 export const getResponsesRequestOptions = (
   payload: ResponsesPayload,
 ): { vision: boolean; initiator: "agent" | "user" } => {
   const vision = hasVisionInput(payload)
-  const initiator = hasAgentInitiator(payload) ? "agent" : "user"
+  const naturalInitiator = hasAgentInitiator(payload) ? "agent" : "user"
+
+  const mode = getAgentInitiatorMode()
+  let initiator: "agent" | "user"
+  if (mode === "all") {
+    initiator = "agent"
+  } else if (mode === "non-first") {
+    const hasAssistantTurn = getPayloadItems(payload).some(
+      (item) => "role" in item && item.role === "assistant",
+    )
+    initiator = hasAssistantTurn ? "agent" : naturalInitiator
+  } else {
+    initiator = naturalInitiator
+  }
 
   return { vision, initiator }
 }
