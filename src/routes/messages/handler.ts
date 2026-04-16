@@ -368,8 +368,9 @@ const handleWithMessagesApi = async (
     anthropicPayload.thinking = {
       type: "adaptive",
     }
-    anthropicPayload.output_config = {
-      effort: getAnthropicEffortForModel(anthropicPayload.model),
+    const effort = getAnthropicEffortForModel(anthropicPayload.model)
+    if (effort) {
+      anthropicPayload.output_config = { effort }
     }
   }
 
@@ -428,12 +429,15 @@ const isAsyncIterable = <T>(value: unknown): value is AsyncIterable<T> =>
   Boolean(value)
   && typeof (value as AsyncIterable<T>)[Symbol.asyncIterator] === "function"
 
+const modelsWithoutEffortSupport = new Set(["claude-opus-4.7"])
+
 const getAnthropicEffortForModel = (
   model: string,
-): "low" | "medium" | "high" | "max" => {
+): "low" | "medium" | "high" | "max" | "xhigh" | "auto" | null => {
+  if (modelsWithoutEffortSupport.has(model)) return null
+
   const reasoningEffort = getReasoningEffortForModel(model)
 
-  if (reasoningEffort === "xhigh") return "max"
   if (reasoningEffort === "none" || reasoningEffort === "minimal") return "low"
 
   return reasoningEffort
