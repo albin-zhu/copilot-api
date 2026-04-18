@@ -6,6 +6,7 @@ import type { Model } from "~/services/copilot/get-models"
 
 import { awaitApproval } from "~/lib/approval"
 import {
+  getAgentInitiatorMode,
   getSmallModel,
   getReasoningEffortForModel,
   isMessagesApiEnabled,
@@ -44,10 +45,13 @@ import {
 import type { SubagentMarker } from "./subagent-marker"
 
 import {
+  type AnthropicAssistantContentBlock,
+  type AnthropicMessage,
   type AnthropicMessagesPayload,
   type AnthropicStreamState,
   type AnthropicTextBlock,
   type AnthropicToolResultBlock,
+  type AnthropicToolUseBlock,
 } from "./anthropic-types"
 import {
   translateToAnthropic,
@@ -96,6 +100,9 @@ export async function handleCompletion(c: Context) {
     // not only for claude, but also for opencode
     // compact requests are excluded from this processing
     mergeToolResultForClaude(anthropicPayload)
+    if (getAgentInitiatorMode() === "all") {
+      wrapUserTextAsToolResult(anthropicPayload)
+    }
   }
 
   const requestId = generateRequestIdFromPayload(anthropicPayload, sessionId)
@@ -524,6 +531,66 @@ const mergeToolResult = (
   return toolResults.map((tr, i) =>
     i === lastIndex ? mergeContentWithTexts(tr, textBlocks) : tr,
   )
+}
+
+const extractPureText = (
+  content: AnthropicMessage["content"],
+): string | null => {
+  if (typeof content === "string") return content
+  if (
+    Array.isArray(content)
+    && content.length > 0
+    && content.every((b) => b.type === "text")
+  ) {
+    return content.map((b) => b.text).join("\n\n")
+  }
+  return null
+}
+
+const wrapUserTextAsToolResult = (payload: AnthropicMessagesPayload): void => {
+  if (!payload.tools || payload.tools.length === 0) return
+
+  const messages = payload.messages
+
+  for (let i = 1; i < messages.length; i++) {
+    const msg = messages[i]
+    if (msg.role !== "user") continue
+
+    const textContent = extractPureText(msg.content)
+    if (!textContent) continue
+
+    const prevMsg = messages[i - 1]
+    if (prevMsg.role !== "assistant") continue
+
+    const fakeId = `toolu_user_${i}`
+
+    const assistantContent: Array<AnthropicAssistantContentBlock> =
+      typeof prevMsg.content === "string" ?
+        [{ type: "text", text: prevMsg.content }]
+      : [...prevMsg.content]
+
+    const alreadyInjected = assistantContent.some(
+      (b): b is AnthropicToolUseBlock =>
+        b.type === "tool_use" && b.id === fakeId,
+    )
+    if (!alreadyInjected) {
+      assistantContent.push({
+        type: "tool_use",
+        id: fakeId,
+        name: "get_user_message",
+        input: {},
+      })
+    }
+    prevMsg.content = assistantContent
+
+    msg.content = [
+      {
+        type: "tool_result",
+        tool_use_id: fakeId,
+        content: textContent,
+      },
+    ]
+  }
 }
 
 const stripCacheControl = (payload: AnthropicMessagesPayload): void => {
