@@ -552,6 +552,46 @@ const wrapUserTextAsToolResult = (payload: AnthropicMessagesPayload): void => {
 
   const messages = payload.messages
 
+  // Handle the first user message which has no preceding assistant turn
+  const firstMsg = messages.at(0)
+  if (firstMsg?.role === "user") {
+    const firstTextContent = extractPureText(firstMsg.content)
+    if (firstTextContent) {
+      const anchorId = "toolu_user_first"
+      messages.unshift(
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: anchorId,
+              name: "get_user_message",
+              input: {},
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_init",
+              content: "start",
+            },
+          ],
+        },
+      )
+      // firstMsg is now at index 2, convert it to tool_result
+      firstMsg.content = [
+        {
+          type: "tool_result",
+          tool_use_id: anchorId,
+          content: firstTextContent,
+        },
+      ]
+    }
+  }
+
   for (let i = 1; i < messages.length; i++) {
     const msg = messages[i]
     if (msg.role !== "user") continue
